@@ -58,8 +58,8 @@
 
 ; app tests
 (module+ test
-  (check-equal? (debruijn '(L0: app (λ (x) (L0: set! y x)) (L0: datum 488)))
-                '(L0: app (λ (x) (L0: set! y x)) (L0: datum 488)))
+  (check-equal? (debruijn '(L0: app (L0: λ (x) (L0: set! y (L0: var x))) (L0: datum 488)))
+                '(L0: app (L0: λ (x) (L0: set! y (L0: var 0))) (L0: datum 488)))
 )
 
 
@@ -93,7 +93,7 @@
     [`(L0: set! ,<id> ,<e>) (cond [(index-of env <id>) `(L0: set! ,(index-of env <id>)
                                                              ,(debruijn <e> env))]
                                   [else `(L0: set! ,<id> ,(debruijn <e> env))])]
-    [_ e])) ;maybe replace this with datum and forget about unmatched expressions
+    [`(L0: datum ,<n>) `(L0: datum ,<n>)])) 
 
 
 #| Indexing of a Debruijnized L0 Expression
@@ -107,16 +107,25 @@
 
 ; For a debruijned L0 expression e, give each λ expression a unique index,
 ;  and each if expression a unique index.
-(define (index-λs e [count (counter)])
-  (match e
-    [`(L0: λ (,<n>) ,<e>) (let ([temp (index-λs <e> count)]) `(L0: λ ,(count) ,temp))]
-    [`(L0: app ,<e1> ,<e2>) `(L0: app ,(index-λs <e1> count) ,(index-λs <e2> count))]
-    [`(L0: set! ,<n> ,<e>) `(L0: set! ,<n> ,(index-λs <e> count))]
-    [_ e]))
+
+;test lambdas
+(module+ test
+  (check-equal? (index '(L0: λ (x) (L0: datum 488))) '(L0: λ 0 (x) (L0: datum 488))))
+
+;test ifs
+
+;test lambdas and ifs
 
 (define (index e [λ-count (counter)] [if-count (counter)])
-  (define (index′ e) (index e λ-count if-count))
-  e)
+  (match e
+    [`(L0: app ,<e1> ,<e2>) `(L0: app ,(index <e1> λ-count if-count) ,(index <e2> λ-count if-count))]
+    [`(L0: set! ,<n> ,<e>) `(L0: set! ,<n> ,(index <e> λ-count if-count))]
+    [`(L0: λ (,<id>) ,<e>) (let ([tmp (index <e> λ-count if-count)]) `(L0: λ ,(λ-count) (,<id>) ,tmp))]
+    [`(L0: if ,<e1> ,<e2> ,<e3>) `(L0: ,(if-count)
+                                       ,(index <e1> λ-count if-count)
+                                       ,(index <e2> λ-count if-count)
+                                       ,(index <e3> λ-count if-count))]
+    [_ e]))
 
 
 #;(module+ test
