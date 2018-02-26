@@ -63,32 +63,20 @@
 )
 
 
-#| 
-(define (debruijn-if e)
-  (define c (counter))
-  (define (debruijn-if′ e)
-    (match e
-      [`(L0: if ,<d-e1> ,<d-e2> ,<d-e3>) `(L0: if ,(c) ,(debruijn-if′ <d-e1>)
-                                               ,(debruijn-if′ <d-e2>)
-                                               ,(debruijn-if′ <d-e3>))]
-      [`(L0: λ (,<id>) ,<e>) `(L0: λ (,<id>) ,(debruijn-if′ <e>))]
-      [`(L0: app ,<e1> ,<e2>) `(L0: ,(debruijn-if <e1>) ,(debruijn-if <e2>))]
-      [`(L0: set! ,<id> ,<e>) `(L0: set! ,<id> ,(debruijn-if <e>))]
-      [_ e]))
-  (debruijn-if′ e))
-|#
-  
-  
 
 (define (debruijn e [env '()]) ; Takes an optional second argument, which defaults to the empty list.
   (match e
-    [`(L0: λ (,<id>) ,<e>) `(L0: λ (,<id>) ,(debruijn <e> (append (list <id>) env)))]
-    [`(L0: if ,<e1> , <e2> ,<e3>) '(L0 if ,(debruijn <e1>)
+    [`(L0: λ (,<id>) ,<e>)
+     `(L0: λ (,<id>) ,(debruijn <e> (append (list <id>) env)))]
+    [`(L0: if ,<e1> , <e2> ,<e3>)
+     `(L0 if ,(debruijn <e1>)
                                        ,(debruijn <e2>)
                                        ,(debruijn <e3>))]
-    [`(L0: var ,<id>) (cond [(index-of env <id>) `(L0: var, (index-of env <id>))]
+    [`(L0: var ,<id>)
+     (cond [(index-of env <id>) `(L0: var, (index-of env <id>))]
                             [else `(L0: var ,<id>)])]
-    [`(L0: app ,<e1> ,<e2>) `(L0: app ,(debruijn <e1> env) ,(debruijn <e2> env))]
+    [`(L0: app ,<e1> ,<e2>)
+     `(L0: app ,(debruijn <e1> env) ,(debruijn <e2> env))]
     
     [`(L0: set! ,<id> ,<e>) (cond [(index-of env <id>) `(L0: set! ,(index-of env <id>)
                                                              ,(debruijn <e> env))]
@@ -159,5 +147,12 @@
 
 
 (define (L0→L1 e)
-  (define (L0→L1′ e) e)
+  (define (L0→L1′ e)
+    (match e
+      [`(L0: datum ,<n>) `(L1: datum ,<n>)]
+      [`(L0: var ,<id>) `(L1: var ,<id>)]
+      [`(L0: set! ,<id> ,<e>) `(L1: set! ,<id> ,(L0→L1′ <e>))]
+      [`(L0: app ,<e1> ,<e2>) `(L1: app ,(L0→L1′ <e1>) ,(L0→L1′ <e2>))]
+      [`(L0: λ ,<n> ,<id> ,<e>) `(L1: λ ,<n> ,<id> ,(L0→L1′ <e>))]
+      [`(L0: if ,<n> ,<e1> ,<e2> ,<e3>) `(L1: if ,<n> ,(L0→L1′ <e1>) ,(L0→L1′ <e2>) ,(L0→L1′ <e3>))]))
   (L0→L1′ (index (debruijn e))))
