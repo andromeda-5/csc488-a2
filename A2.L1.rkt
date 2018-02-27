@@ -46,22 +46,54 @@
 (module+ test
   (check-equal? (debruijn '(L0: set! x (L0: datum 488))) '(L0: set! x (L0: datum 488)))
   (check-equal? (debruijn '(L0: set! x (L0: datum 488)) '(y z x))
-                '(L0: set! 2 (L0: datum 488))))
+                '(L0: set! 2 (L0: datum 488)))
+  (check-equal? (debruijn '(L0: set! x (L0: var y)) '(z y x))
+                '(L0: set! 2 (L0: var 1))))
+
 
 ; λ tests
 
 (module+ test
   (check-equal? (debruijn '(L0: λ (x) (L0: var x))) '(L0: λ (x) (L0: var 0)))
   (check-equal? (debruijn '(L0: λ (x) (L0: λ (y) (L0: var x))) '(z))
-                '(L0: λ (x) (L0: λ (y) (L0: var 1)))))
+                '(L0: λ (x) (L0: λ (y) (L0: var 1))))
+  (check-equal? (debruijn '(L0: λ (x) (L0: set! x (L0: λ (y) (L0: datum 488)))))
+                '(L0: λ (x) (L0: set! 0 (L0: λ (y) (L0: datum 488)))))
+  (check-equal? (debruijn '(L0: λ (x) (L0: set! x (L0: λ (y) (L0: var y)))))
+                '(L0: λ (x) (L0: set! 0 (L0: λ (y) (L0: var 0)))))
+  (check-equal? (debruijn '(L0: λ (x) (L0: set! x (L0: λ (y) (L0: var y)))))
+                '(L0: λ (x) (L0: set! 0 (L0: λ (y) (L0: var 0))))))
 
 
 ; app tests
 (module+ test
   (check-equal? (debruijn '(L0: app (L0: λ (x) (L0: set! y (L0: var x))) (L0: datum 488)))
                 '(L0: app (L0: λ (x) (L0: set! y (L0: var 0))) (L0: datum 488)))
-)
+  (check-equal? (debruijn '(L0: app (L0: app (L0: var +) (L0: datum 488)) (L0: datum 0)))
+                '(L0: app (L0: app (L0: var +) (L0: datum 488)) (L0: datum 0)))
+  (check-equal? (debruijn '(L0: app (L0: app (L0: var *) (L0: datum 488)) (L0: datum 0)))
+                '(L0: app (L0: app (L0: var *) (L0: datum 488)) (L0: datum 0)))
+  (check-equal? (debruijn '(L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 0)))
+                '(L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 0)))
 
+  (check-equal? (debruijn '(L0: app (L0: λ (x) (L0: app (L0: app (L0: var +) (L0: datum 0))(L0: var x)))(L0: datum 488)))
+                '(L0: app (L0: λ (x) (L0: app (L0: app (L0: var +) (L0: datum 0)) (L0: var 0))) (L0: datum 488)))
+  (check-equal? (debruijn '(L0: app (L0: λ (x) (L0: app (L0: app (L0: var *) (L0: datum 0))(L0: var x)))(L0: datum 488)))
+                '(L0: app (L0: λ (x) (L0: app (L0: app (L0: var *) (L0: datum 0)) (L0: var 0))) (L0: datum 488)))
+  (check-equal? (debruijn '(L0: app (L0: λ (x) (L0: app (L0: app (L0: var <) (L0: datum 0))(L0: var x)))(L0: datum 488)))
+                '(L0: app (L0: λ (x) (L0: app (L0: app (L0: var <) (L0: datum 0)) (L0: var 0))) (L0: datum 488)))
+  (check-equal? (debruijn '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var +) (L0: var y)))(L0: var x)))(L0: datum 0))(L0: datum 488)))
+                '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var +) (L0: var 0))) (L0: var 0))) (L0: datum 0)) (L0: datum 488)))
+  (check-equal? (debruijn '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var *) (L0: var y)))(L0: var x)))(L0: datum 0))(L0: datum 488)))
+                '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var *) (L0: var 0))) (L0: var 0))) (L0: datum 0)) (L0: datum 488)))
+  (check-equal? (debruijn '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var <) (L0: var y)))(L0: var x)))(L0: datum 0))(L0: datum 488)))
+                '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var <) (L0: var 0))) (L0: var 0))) (L0: datum 0)) (L0: datum 488))))
+
+; if tests -> debruijn rewrites subexpressions leaving the form of an if expression the same
+(module+ test
+  (check-equal? (debruijn '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 9) (L0: datum 10)))
+                '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 9) (L0: datum 10)))
+                )
 
 
 (define (debruijn e [env '()]) ; Takes an optional second argument, which defaults to the empty list.
@@ -69,7 +101,7 @@
     [`(L0: λ (,<id>) ,<e>)
      `(L0: λ (,<id>) ,(debruijn <e> (append (list <id>) env)))]
     [`(L0: if ,<e1> , <e2> ,<e3>)
-     `(L0 if ,(debruijn <e1>)
+     `(L0: if ,(debruijn <e1>)
                                        ,(debruijn <e2>)
                                        ,(debruijn <e3>))]
     [`(L0: var ,<id>)
@@ -98,9 +130,16 @@
 
 ;test lambdas
 (module+ test
-  (check-equal? (index '(L0: λ (x) (L0: datum 488))) '(L0: λ 0 (x) (L0: datum 488))))
+  (check-equal? (index '(L0: λ (x) (L0: datum 488))) '(L0: λ 0 (x) (L0: datum 488)))
+  (check-equal? (index '(L0: λ (x) (L0: λ (y) (L0: λ (z) (L0: datum 488)))))
+                '(L0: λ 2 (x) (L0: λ 1 (y) (L0: λ 0 (z) (L0: datum 488))))) )
 
 ;test ifs
+(module+ test
+  (check-equal? (index '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
+                '(L0: if 0 (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
+    (check-equal? (index '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
+                '(L0: if 0 (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0))))
 
 ;test lambdas and ifs
 
@@ -109,7 +148,7 @@
     [`(L0: app ,<e1> ,<e2>) `(L0: app ,(index <e1> λ-count if-count) ,(index <e2> λ-count if-count))]
     [`(L0: set! ,<n> ,<e>) `(L0: set! ,<n> ,(index <e> λ-count if-count))]
     [`(L0: λ (,<id>) ,<e>) (let ([tmp (index <e> λ-count if-count)]) `(L0: λ ,(λ-count) (,<id>) ,tmp))]
-    [`(L0: if ,<e1> ,<e2> ,<e3>) `(L0: ,(if-count)
+    [`(L0: if ,<e1> ,<e2> ,<e3>) `(L0: if ,(if-count)
                                        ,(index <e1> λ-count if-count)
                                        ,(index <e2> λ-count if-count)
                                        ,(index <e3> λ-count if-count))]
@@ -117,26 +156,6 @@
 
 
 #;(module+ test
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
   (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
                 '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
   )
