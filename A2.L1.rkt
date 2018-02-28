@@ -128,6 +128,7 @@
 ; For a debruijned L0 expression e, give each λ expression a unique index,
 ;  and each if expression a unique index.
 
+
 ;test lambdas
 (module+ test
   (check-equal? (index '(L0: λ (x) (L0: datum 488))) '(L0: λ 0 (x) (L0: datum 488)))
@@ -138,26 +139,50 @@
 (module+ test
   (check-equal? (index '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
                 '(L0: if 0 (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
-    (check-equal? (index '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
-                '(L0: if 0 (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0))))
+  (check-equal? (index '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
+                '(L0: if 0 (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
+  (check-equal? (index '(L0: if (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 0))
+                             (L0: if (L0: app (L0: app (L0: var <) (L0: datum 500)) (L0: datum 12))
+                                  (L0: app (L0: app (L0: var *) (L0: datum 5)) (L0: datum 100))
+                                  (L0: if (L0: app (L0: app (L0: var <) (L0: datum 99)) (L0: datum 401))
+                                       (L0: datum 56) (L0: datum 57)))
+                             (L0: if (L0: app (L0: app (L0: var <) (L0: datum 6)) (L0: datum 9))
+                                  (L0: if (L0: app (L0: app (L0: var <) (L0: datum 7)) (L0: datum 15))
+                                        (L0: datum 555) (L0: datum 777))
+                                  (L0: if (L0: app (L0: app (L0: var <) (L0: datum 98)) (L0: datum 400))
+                                       (L0: datum 999) (L0: datum 1000)))))
+                '(L0: if 0 (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 0))
+                             (L0: if 1 (L0: app (L0: app (L0: var <) (L0: datum 500)) (L0: datum 12))
+                                  (L0: app (L0: app (L0: var *) (L0: datum 5)) (L0: datum 100))
+                                  (L0: if 2 (L0: app (L0: app (L0: var <) (L0: datum 99)) (L0: datum 401))
+                                       (L0: datum 56) (L0: datum 57)))
+                             (L0: if 3 (L0: app (L0: app (L0: var <) (L0: datum 6)) (L0: datum 9))
+                                  (L0: if 4 (L0: app (L0: app (L0: var <) (L0: datum 7)) (L0: datum 15))
+                                       (L0: datum 555) (L0: datum 777))
+                                  (L0: if 5 (L0: app (L0: app (L0: var <) (L0: datum 98)) (L0: datum 400))
+                                       (L0: datum 999) (L0: datum 1000))))))
+
+;test app
+
+;test set
 
 ;test lambdas and ifs
+
+
 
 (define (index e [λ-count (counter)] [if-count (counter)])
   (match e
     [`(L0: app ,<e1> ,<e2>) `(L0: app ,(index <e1> λ-count if-count) ,(index <e2> λ-count if-count))]
     [`(L0: set! ,<n> ,<e>) `(L0: set! ,<n> ,(index <e> λ-count if-count))]
     [`(L0: λ (,<id>) ,<e>) (let ([tmp (index <e> λ-count if-count)]) `(L0: λ ,(λ-count) (,<id>) ,tmp))]
-    [`(L0: if ,<e1> ,<e2> ,<e3>) `(L0: if ,(if-count)
-                                       ,(index <e1> λ-count if-count)
-                                       ,(index <e2> λ-count if-count)
-                                       ,(index <e3> λ-count if-count))]
-    [_ e]))
+    [`(L0: if ,<e1> ,<e2> ,<e3>) `(L0: if ,(if-count) ,(index <e1> λ-count if-count) ,(index <e2> λ-count if-count) ,(index <e3> λ-count if-count))]
+    [_ e]
+    ))
 
 
 #;(module+ test
-  (check-equal? (L0→L1 '(L0: if (L0:...) (L0: ...) (L0: ...)))
-                '(L1: if 0 (L1: ...) (L1: ...) (L1: ...)))
+  (check-equal? (L0→L1 '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
+                '(L1: if 0 (L1: app (L1: app (L1: var <) (L1: datum 488)) (L1: datum 0)) (L1: datum 488) (L1: datum 0)))
   )
 
 #| L0→L1
