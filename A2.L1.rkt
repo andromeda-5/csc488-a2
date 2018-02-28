@@ -163,7 +163,11 @@
                                        (L0: datum 999) (L0: datum 1000))))))
 
 ;test app
-
+(module+ test
+  (check-equal? (index '(L0: app (L0: λ (x) (L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: var x))
+                                                 (L0: datum 500) (L0: datum 501))) (L0: datum 1)))
+                '(L0: app (L0: λ 0 (x) (L0: if 0 (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: var x))
+                                            (L0: datum 500) (L0: datum 501))) (L0: datum 1))))
 ;test set
 
 ;test lambdas and ifs
