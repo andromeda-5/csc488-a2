@@ -90,6 +90,7 @@
                 '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var <) (L0: var 0))) (L0: var 0))) (L0: datum 0)) (L0: datum 488))))
 
 ; if tests -> debruijn rewrites subexpressions leaving the form of an if expression the same
+; TO-DO: add more if tests
 (module+ test
   (check-equal? (debruijn '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 9) (L0: datum 10)))
                 '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 9) (L0: datum 10)))
@@ -167,11 +168,41 @@
   (check-equal? (index '(L0: app (L0: λ (x) (L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: var x))
                                                  (L0: datum 500) (L0: datum 501))) (L0: datum 1)))
                 '(L0: app (L0: λ 0 (x) (L0: if 0 (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: var x))
-                                            (L0: datum 500) (L0: datum 501))) (L0: datum 1))))
+                                            (L0: datum 500) (L0: datum 501))) (L0: datum 1)))
+  (check-equal? (index '(L0: app (L0: λ (x) (L0: if (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: var x))
+                                                 (L0: app (L0: app (L0: var +) (L0: datum 488)) (L0: var x))
+                                                 (L0: app (L0: app (L0: var *) (L0: datum 488)) (L0: var x))))
+                             (L0: if (L0: app (L0: app (L0: var < )(L0: datum 488)) (L0: datum 488))
+                                  (L0: λ (x) (L0: λ (y) (L0: datum 488)))
+                                  (L0: λ (x) (L0: λ (y) (L0: datum 489))))))
+                '(L0: app (L0: λ 0 (x) (L0: if 0 (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: var x))
+                                            (L0: app (L0: app (L0: var +) (L0: datum 488)) (L0: var x))
+                                            (L0: app (L0: app (L0: var *) (L0: datum 488)) (L0: var x))))
+                      (L0: if 1 (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 488))
+                           (L0: λ 2 (x) (L0: λ 1 (y) (L0: datum 488)))
+                           (L0: λ 4 (x) (L0: λ 3 (y) (L0: datum 489)))))))
 ;test set
-
-;test lambdas and ifs
-
+; TO-DO: add set tests
+(module+ test
+  (check-equal? (index '(L0: set! 0 (L0: var 9)))
+                '(L0: set! 0 (L0: var 9)))
+  (check-equal? (index '(L0: set! 0 (L0: λ (x) (L0: datum 4))))
+                '(L0: set! 0 (L0: λ 0 (x) (L0: datum 4))))
+  (check-equal? (index '(L0: set! 0 (L0: if (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 488))
+                                         (L0: datum 0)
+                                         (L0: datum 488))))
+                '(L0: set! 0 (L0: if 0 (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 488))
+                                         (L0: datum 0)
+                                         (L0: datum 488))))
+   (check-equal? (index '(L0: set! 0 (L0: set! 1 (L0: set! 2 (L0: set! 3 (L0: λ (x)
+                                                                (L0: if (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 488))
+                                                                     (L0: datum 488)
+                                                                     (L0: λ (y) (L0: datum 488)))))))))
+   '(L0: set! 0 (L0: set! 1 (L0: set! 2 (L0: set! 3 (L0: λ 1 (x)
+                                                         (L0: if 0 (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 488))
+                                                              (L0: datum 488)
+                                                              (L0: λ 0 (y) (L0: datum 488))))))))
+   ))
 
 
 (define (index e [λ-count (counter)] [if-count (counter)])
@@ -184,10 +215,15 @@
     ))
 
 
-#;(module+ test
+;TO-DO: add more L0->L1 tests
+(module+ test
+  (check-equal? (L0→L1 '(L0: var x)) '(L1: var x))
+  (check-equal? (L0→L1 '(L0: datum 488)) '(L1: datum 488))
   (check-equal? (L0→L1 '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
                 '(L1: if 0 (L1: app (L1: app (L1: var <) (L1: datum 488)) (L1: datum 0)) (L1: datum 488) (L1: datum 0)))
-  )
+
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: var x)))'(L1: λ 0 (x) (L1: var 0)))
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: λ (y) (L0: var x)))) ' (L1: λ 1 (x) (L1: λ 0 (y) (L1: var 1)))))
 
 #| L0→L1
 

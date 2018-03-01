@@ -81,7 +81,8 @@
   (check-equal? (debruijn '(L0: λ (x) (L0: datum 2))) '(L0: λ (x) (L0: datum 2)))
   (check-equal? (debruijn '(L0: λ (x) (L0: datum 2)) '(a b c x)) '(L0: λ (x) (L0: datum 2)))
   (check-equal? (debruijn '(L0: λ (x) (L0: var x))) '(L0: λ (x) (L0: var 0)))
-  (check-equal? (debruijn '(L0: λ (x) (L0: λ (y) (L0: set! x (L0: var y))))) '(L0: λ (x) (L0: λ (y) (L0: set! 1 (L0: var 0))))))
+  (check-equal? (debruijn '(L0: λ (x) (L0: λ (y) (L0: set! x (L0: var y)))))
+                '(L0: λ (x) (L0: λ (y) (L0: set! 1 (L0: var 0))))))
 
 (define (debruijn e [env '()]) ; Takes an optional second argument, which defaults to the empty list.
   (match e

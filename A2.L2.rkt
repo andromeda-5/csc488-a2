@@ -37,5 +37,92 @@
 (define (lambda_ n)
   (format-symbol "lambda_~a" n))
 
+(module+ test
+  (check-equal? (L1→L2 '(L1: var 0)) (compiled:L2 '((L2: variable 0)) '()))
+  (check-equal? (L1→L2 '(L1: var 4)) (compiled:L2 '((L2: variable 4)) '()))
+  (check-equal? (L1→L2 '(L1: var +)) (compiled:L2 '((L2: closure make_add)) '()))
+  (check-equal? (L1→L2 '(L1: var *)) (compiled:L2 '((L2: closure make_multiply)) '()))
+  (check-equal? (L1→L2 '(L1: var <)) (compiled:L2 '((L2: closure make_less_than)) '()))
+  (check-equal? (L1→L2 '(L1: var call/ec)) (compiled:L2 '((L2: closure call_ec)) '()))
+  (check-equal? (L1→L2 '(L1: datum 2))
+                (compiled:L2 '((L2: set_result 2))
+                             '()))
+  (check-equal? (L1→L2 '(L1: set! 0 (L1: datum 2)))
+                (compiled:L2 '((L2: set_result 2) (L2: set 0))
+                             '()))
+  (check-equal? (L1→L2 '(L1: app (L1: datum 2) (L1: datum 3)))
+                (compiled:L2 '((L2: set_result 2) (L2: push_result) (L2: set_result 3) (L2: call))
+                             '()))
+  (check-equal? (L1→L2 '(L1: app (L1: λ 0 (L1: set! 0 (L1: datum 488))) (L1: var 2)))
+                (compiled:L2 '((L2: closure lambda_0) (L2: push_result) (L2: variable 2) (L2: call))
+                             '((lambda_0 ((L2: set_result 488) (L2: set 0))))))
+  (check-equal? (L1→L2 '(L1: λ 0 (L1: datum 2)))
+                (compiled:L2 '((L2: closure lambda_0))
+                             '((lambda_0 ((L2: set_result 2))))))
+  (check-equal? (L1→L2 '(L1: λ 1 (L1: λ 0 (L1: datum 2))))
+                (compiled:L2 '((L2: closure lambda_1))
+                             '((lambda_1 ((L2: closure lambda_0)))
+                               (lambda_0 ((L2: set_result 2))))))
+  (check-equal? (L1→L2 '(L1: λ 0 (L1: app (L1: datum 2) (L1: datum 3))))
+                (compiled:L2 '((L2: closure lambda_0))
+                             '((lambda_0 ((L2: set_result 2) (L2: push_result) (L2: set_result 3) (L2: call))))))
+  (check-equal? (L1→L2 '(L1: app (L1: app (L1: var +) (L1: datum 3)) (L1: datum 4)))
+                (compiled:L2 '((L2: closure make_add) (L2: push_result) (L2: set_result 3) (L2: call) (L2: push_result) (L2: set_result 4) (L2: call))
+                             '()))
+  (check-equal? (L1→L2 '(L1: app (L1: app (L1: var *) (L1: datum 3)) (L1: datum 4)))
+                (compiled:L2 '((L2: closure make_multiply) (L2: push_result) (L2: set_result 3) (L2: call) (L2: push_result) (L2: set_result 4) (L2: call))
+                             '()))
+  (check-equal? (L1→L2 '(L1: app (L1: λ 0 (L1: app (L1: app (L1: var +) (L1: datum 3)) (L1: var 0))) (L1: datum 5)))
+                (compiled:L2 '((L2: closure lambda_0) (L2: push_result) (L2: set_result 5) (L2: call))
+                             '((lambda_0 ((L2: closure make_add) (L2: push_result) (L2: set_result 3) (L2: call) (L2: push_result) (L2: variable 0) (L2: call))))))
+
+  (check-equal? (L1→L2 '(L1: if 0 (L1: app (L1: app (L1: var <) (L1: datum 488)) (L1: datum 0)) (L1: datum 0) (L1: datum 488)))
+                (compiled:L2 '((L2: closure make_less_than)
+                               (L2: push_result)
+                               (L2: set_result 488)
+                               (L2: call)
+                               (L2: push_result)
+                               (L2: set_result 0)
+                               (L2: call)
+                               (L2: jump_false else_0)
+                               (L2: set_result 0)
+                               (L2: jump end_0)
+                               (L2: label else_0)
+                               (L2: set_result 488)
+                               (L2: label end_0))
+                             '()))
+
+  )
+
 (define (L1→L2 e)
-  e)
+  (match e
+    [`(L1: var +) (compiled:L2 '((L2: closure make_add)) '())]
+    [`(L1: var *) (compiled:L2 '((L2: closure make_multiply)) '())]
+    [`(L1: var <) (compiled:L2 '((L2: closure make_less_than)) '())]
+    [`(L1: var call/ec) (compiled:L2 '((L2: closure call_ec)) '())]
+    [`(L1: var ,<n>) (compiled:L2 `((L2: variable ,<n>)) '())]
+    [`(L1: datum ,<i>) (compiled:L2 `((L2: set_result ,<i>)) '())]
+    [`(L1: set! ,<n> ,<e>) (let ([e (L1→L2 <e>)])
+                             (compiled:L2
+                              (append (compiled:L2-code e) `((L2: set ,<n>)))
+                              (compiled:L2-λs e)))]
+    [`(L1: app ,<e1> ,<e2>) (let ([e1 (L1→L2 <e1>)] [e2 (L1→L2 <e2>)])
+                              (compiled:L2
+                               (append (compiled:L2-code e1) (list '(L2: push_result)) (compiled:L2-code e2) (list '(L2: call)))
+                               (append (compiled:L2-λs e1) (compiled:L2-λs e2))))]
+    [`(L1: λ ,<n> ,<e>) (let ([e (L1→L2 <e>)])
+                             (compiled:L2
+                              `((L2: closure ,(lambda_ <n>)))
+                              (cons (list (lambda_ <n>) (compiled:L2-code e)) (compiled:L2-λs e))))]
+    [`(L1: if ,<n> ,<e1> ,<e2> ,<e3>) (let ([e1 (L1→L2 <e1>)] [e2 (L1→L2 <e2>)] [e3 (L1→L2 <e3>)])
+                                       (compiled:L2
+                                        (append (compiled:L2-code e1)
+                                                (list `(L2: jump_false ,(format-symbol "else_~a" <n>)))
+                                                (compiled:L2-code e2)
+                                                (list `(L2: jump ,(format-symbol "end_~a" <n>)))
+                                                (list `(L2: label ,(format-symbol "else_~a" <n>)))
+                                                (compiled:L2-code e3)
+                                                (list `(L2: label ,(format-symbol "end_~a" <n>))))
+                                        (append (compiled:L2-λs e1) (compiled:L2-λs e2) (compiled:L2-λs e3))))]                 
+    )
+  )
