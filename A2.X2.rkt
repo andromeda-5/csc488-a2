@@ -3,12 +3,12 @@
 (provide L2→X2
          Mac? heap-size postamble)
 
-(require "A1.L2.rkt")
+(require "A2.L2.rkt")
 
 (module+ test (require rackunit))
 
 ; Whether to emit code for the Mac, that Apple's gcc wrapper for clang handles. |#
-(define Mac? (make-parameter #false))
+(define Mac? (make-parameter #true))
 
 ; Size of the heap.
 (define heap-size (make-parameter (/ (* 4 (expt 2 30)) 8))) ; 4G of 8-byte data.
@@ -97,12 +97,7 @@
   This does make them count as offset dereferences, and the limitation of the previous
   section applies. |#
 
-; main()
-;   temp = make_add
-;   goto main
-#;(labelled 'main
-            (movq (label-reference 'make_add) temp)
-            (jmp 'main))
+
 
 (define (mangle name) (~a (if (Mac?) '_ "") name))
 (define (labelled name . lines) (list (~a (mangle name) ':)
@@ -110,6 +105,13 @@
 (define (label-reference name) (~a (mangle name) "@GOTPCREL(%rip)"))
 
 (define (jmp-label name) (~a 'jmp " " (mangle name)))
+
+; main()
+;   temp = make_add
+;   goto main
+(labelled 'main
+            (movq (label-reference 'make_add) temp)
+            (jmp-label 'main))
 
 #| The Stack
    =========
@@ -180,18 +182,18 @@
 
 ; Set result to integer i.
 (define (set_result i)
-  (list))
+  (movq (constant i) result))
 
 ; Push result onto the stack.
 (define (push_result)
-  (list))
+  (pushq result))
 
 ; Put a closure on the heap.
 ;   A closure is a pair of body address and an env.
 ;   The closure is put at the address referred to by next, and then next is adjusted
 ;    to point to the next place to put a pair.
 (define (closure name)
-  (list))
+(list))
 
 ; Call the closure that's on the stack, with the argument that's in result.
 ;   Temporarily stores env on the stack.
