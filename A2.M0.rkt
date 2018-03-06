@@ -89,14 +89,37 @@
 ; Otherwise, they are straightforward untagged versions of L0 expressions.
 ; Transform those directly to their L0 form.
 
-(define-transformer T:*id* *id*
-  [e e])
-(define-transformer T:*datum* *datum*
-  [e e])
+(module+ test
+  (check-equal? (transformer-name T:*id*) 'var)
+  (check-equal? ((transformer-function T:*id*) '(var false)) 0)
+  (check-equal? ((transformer-function T:*id*) '(var true)) 1)
+  (check-equal? ((transformer-function T:*id*) '(var x)) '(L0: var x)))
+
+(define-transformer T:*id* var
+  [`(var false) 0]
+  [`(var true) 1]
+  [`(var ,*<id>*) `(L0: ,(transformer-name T:*id*) ,*<id>*)])
+
+(module+ test
+  (check-equal? (transformer-name T:*datum*) 'datum)
+  (check-equal? ((transformer-function T:*datum*) '(*datum* 488)) `(L0: datum 488)))
+
+(define-transformer T:*datum* datum
+  [`(*datum* ,*<datum>*) `(L0: ,(transformer-name T:*datum*) ,*<datum>*)])
+
+(module+ test
+  (check-equal? (transformer-name T:set!) 'set!)
+  (check-equal? ((transformer-function T:set!) '(a 2)) '(L0: set! a 2)))
+
 (define-transformer T:set! set!
-  [e e])
+  [`(,*<id>* ,*<e>*) `(L0: set! ,*<id>* ,*<e>*)])
+
+(module+ test
+  (check-equal? (transformer-name T:if) 'if)
+  (check-equal? ((transformer-function T:if) '((< 1 2) true false)) '(L0: if (< 1 2) true false)))
+
 (define-transformer T:if if
-  [e e])
+  [`(,*<e1>* ,*<e2>* ,*<e3>*) `(L0: if ,*<e1>* ,*<e2>* ,*<e3>*)])
 
 ; λ
 ; -
