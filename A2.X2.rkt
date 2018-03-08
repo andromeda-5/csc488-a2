@@ -193,37 +193,58 @@
 ;   The closure is put at the address referred to by next, and then next is adjusted
 ;    to point to the next place to put a pair.
 (define (closure name)
-(list))
+  (list (movq (label-reference name) (★ next))
+        (movq env (★ next 1))
+        (movq next result)
+        (addq (constant (⊕ 2)) next)))
 
 ; Call the closure that's on the stack, with the argument that's in result.
 ;   Temporarily stores env on the stack.
 ;   Sets env to a new environment containing the closure's environment and the argument.
 ;   Calls the closure.
 (define (call)
-  (list))
+  (list (popq temp)
+        (pushq env)
+        (movq (★ temp 1) env)
+        (movq env (★ next))
+        (movq result (★ next 1))
+        (movq next env)
+        (addq (constant (⊕ 2)) next)
+        (callq temp)
+        (popq env)))
 
 ; Puts the value of the variable n levels up from env, into result.
 ;   To “loop” n times: emits n statements.
+; env is an address: parent environment (the address of the parent environment), variable at this environment
+
+
+(define (variable1 n)
+    (if (equal? n 0)
+        `(★ env 1)
+        `(★ ,(variable1 (- n 1)) 1)))
+
 (define (variable n)
-  (list))
+  (let ([t (variable1 n)])
+        (movq t result)))
 
 ; Sets the variable n levels up from env, to the value of result.
 ;   To “loop” n times: emits n statements.
 (define (set n)
-  (list))
+   (movq result (★ env (⊕ n))))
 
 ; Names the current statement address.
 (define (label name)
-  (list))
+  (~a (mangle name) ":"))
 
 ; Jumps to a named statement address.
 (define (jump name)
-  (list))
+  (jmp-label name))
 
 ; Jumps to a named statement address, if result is false.
 ;   False is represented by 0.
 (define (jump_false name)
-  (list))
+  (list (cmpq (constant 0) result)
+        (je-label name)))
 
 #| L2 to X2
    ======== |#
@@ -264,6 +285,8 @@
                                       '())))
 
 ; Put X2 versions of make_add and add in RTL below.
+
+
 ; Similarly, find the 64-bit x86 instruction for multiplication, and add multiplication.
 
 ; Escape Continuations
