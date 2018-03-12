@@ -404,15 +404,15 @@
            ; (- a b) : the difference between a and b
            (define (- a b) (+ a (⊖ b)))
            ; (⊖ a) : the negative of a
-           (define (⊖ a) (- a))
+           (define (⊖ a) (* -1 a))
            ; (> a b) : whether a is greater than b
            (define (> a b)
-             (if (> a b) 'true 'false))
+             (and (>= a b) (not (= a b))))
            ; (>= a b) : whether a is greater than or equal to b
            (define (>= a b)
-             (if (>= a b) 'true 'false))
+             (not (< a b))
            ; (= a b) : whether a is equal to b
            (define (= a b)
-             (if (= a b) 'true 'false))
+             (and (not (< 0 (- a b))) (not (< 0 (- b a)))))
            ]
      ,e))

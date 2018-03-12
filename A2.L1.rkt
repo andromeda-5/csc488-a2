@@ -89,8 +89,7 @@
   (check-equal? (debruijn '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var <) (L0: var y)))(L0: var x)))(L0: datum 0))(L0: datum 488)))
                 '(L0: app (L0: app (L0: λ (x) (L0: app (L0: λ (y) (L0: app (L0: var <) (L0: var 0))) (L0: var 0))) (L0: datum 0)) (L0: datum 488))))
 
-; if tests -> debruijn rewrites subexpressions leaving the form of an if expression the same
-; TO-DO: add more if tests
+
 (module+ test
   (check-equal? (debruijn '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 9) (L0: datum 10)))
                 '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 9) (L0: datum 10)))
@@ -130,13 +129,11 @@
 ;  and each if expression a unique index.
 
 
-;test lambdas
 (module+ test
   (check-equal? (index '(L0: λ (x) (L0: datum 488))) '(L0: λ 0 (x) (L0: datum 488)))
   (check-equal? (index '(L0: λ (x) (L0: λ (y) (L0: λ (z) (L0: datum 488)))))
                 '(L0: λ 2 (x) (L0: λ 1 (y) (L0: λ 0 (z) (L0: datum 488))))) )
 
-;test ifs
 (module+ test
   (check-equal? (index '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
                 '(L0: if 0 (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
@@ -163,7 +160,6 @@
                                   (L0: if 5 (L0: app (L0: app (L0: var <) (L0: datum 98)) (L0: datum 400))
                                        (L0: datum 999) (L0: datum 1000))))))
 
-;test app
 (module+ test
   (check-equal? (index '(L0: app (L0: λ (x) (L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: var x))
                                                  (L0: datum 500) (L0: datum 501))) (L0: datum 1)))
@@ -181,8 +177,7 @@
                       (L0: if 1 (L0: app (L0: app (L0: var <) (L0: datum 488)) (L0: datum 488))
                            (L0: λ 2 (x) (L0: λ 1 (y) (L0: datum 488)))
                            (L0: λ 4 (x) (L0: λ 3 (y) (L0: datum 489)))))))
-;test set
-; TO-DO: add set tests
+
 (module+ test
   (check-equal? (index '(L0: set! 0 (L0: var 9)))
                 '(L0: set! 0 (L0: var 9)))
@@ -214,21 +209,38 @@
     [_ e]
     ))
 
-
-;TO-DO: add more L0->L1 tests
+;old tests
 (module+ test
-  (check-equal? (L0→L1 '(L0: var x)) '(L1: var x))
   (check-equal? (L0→L1 '(L0: datum 488)) '(L1: datum 488))
+  (check-equal? (L0→L1 '(L0: var x)) '(L1: var x))
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: var x))) '(L1: λ 0 (L1: var 0)))
+  (check-equal? (L0→L1 '(L0: set! x (L0: datum 488)))
+                '(L1: set! x (L1: datum 488)))
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: set! x (L0: datum 488))))
+                '(L1: λ 0 (L1: set! 0 (L1: datum 488))))
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: set! x (L0: datum 488))))
+                '(L1: λ 0 (L1: set! 0 (L1: datum 488))))
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: app (L0: λ (y) (L0: var y)) (L0: λ (z) (L0: datum 488)))))
+                '(L1: λ 2 (L1: app (L1: λ 0 (L1: var 0)) (L1: λ 1 (L1: datum 488)))))
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: var x)))'(L1: λ 0 (L1: var 0)))
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: λ (y) (L0: var x)))) ' (L1: λ 1 (L1: λ 0 (L1: var 1))))
+  (check-equal? (L0→L1 '(L0: λ (x) (L0: set! x (L0: datum 488))))
+                '(L1: λ 0 (L1: set! 0 (L1: datum 488))))
+  (check-equal? (L0→L1 '(L0: app (L0: var x) (L0: var y)))
+                '(L1: app (L1: var x) (L1: var y)))
+  (check-equal? (L0→L1 '(L0: app (L0: app (L0: var +) (L0: datum 3)) (L0: datum 4)))
+                '(L1: app (L1: app (L1: var +) (L1: datum 3)) (L1: datum 4)))
+  (check-equal? (L0→L1 '(L0: app (L0: app (L0: var *) (L0: datum 3)) (L0: datum 4)))
+                '(L1: app (L1: app (L1: var *) (L1: datum 3)) (L1: datum 4)))
+  (check-equal? (L0→L1 '(L0: app (L0: λ (x) (L0: app (L0: app (L0: var +) (L0: datum 3)) (L0: var x))) (L0: datum 5)))
+                '(L1: app (L1: λ 0 (L1: app (L1: app (L1: var +) (L1: datum 3)) (L1: var 0))) (L1: datum 5)))
   (check-equal? (L0→L1 '(L0: if (L0: app (L0: app (L0: var < ) (L0: datum 488)) (L0: datum 0)) (L0: datum 488) (L0: datum 0)))
-                '(L1: if 0 (L1: app (L1: app (L1: var <) (L1: datum 488)) (L1: datum 0)) (L1: datum 488) (L1: datum 0)))
+                '(L1: if 0 (L1: app (L1: app (L1: var <) (L1: datum 488)) (L1: datum 0)) (L1: datum 488) (L1: datum 0))))
 
-  (check-equal? (L0→L1 '(L0: λ (x) (L0: var x)))'(L1: λ 0 (x) (L1: var 0)))
-  (check-equal? (L0→L1 '(L0: λ (x) (L0: λ (y) (L0: var x)))) ' (L1: λ 1 (x) (L1: λ 0 (y) (L1: var 1)))))
 
 #| L0→L1
 
  For an L0 expression: debruijnizes, indexes, and replaces remaining ‘L0:’ tags with ‘L1:’. |#
-
 
 (define (L0→L1 e)
   (define (L0→L1′ e)
@@ -237,6 +249,6 @@
       [`(L0: var ,<id>) `(L1: var ,<id>)]
       [`(L0: set! ,<id> ,<e>) `(L1: set! ,<id> ,(L0→L1′ <e>))]
       [`(L0: app ,<e1> ,<e2>) `(L1: app ,(L0→L1′ <e1>) ,(L0→L1′ <e2>))]
-      [`(L0: λ ,<n> ,<id> ,<e>) `(L1: λ ,<n> ,<id> ,(L0→L1′ <e>))]
+      [`(L0: λ ,<n> ,<id> ,<e>) `(L1: λ ,<n> ,(L0→L1′ <e>))]
       [`(L0: if ,<n> ,<e1> ,<e2> ,<e3>) `(L1: if ,<n> ,(L0→L1′ <e1>) ,(L0→L1′ <e2>) ,(L0→L1′ <e3>))]))
   (L0→L1′ (index (debruijn e))))
