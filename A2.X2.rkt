@@ -205,32 +205,39 @@
 (define (call)
   (list (popq temp)
         (pushq env)
+        
         (movq (★ temp 1) env)
         (movq env (★ next))
+        
         (movq result (★ next 1))
         (movq next env)
         (addq (constant (⊕ 2)) next)
+        
         (callq temp)
         (popq env)))
 
 ; Puts the value of the variable n levels up from env, into result.
 ;   To “loop” n times: emits n statements.
 ; env is an address: parent environment (the address of the parent environment), variable at this environment
-
-
-(define (variable1 n)
-    (if (equal? n 0)
-        `(★ env 1)
-        `(★ ,(variable1 (- n 1)) 1)))
-
+; until we reach nth variable... move the parent environment (the address to the parent environment) to result
+; once we found the right environment move variable at that environment to result and we are done
+; for (i in range 0 --- n):
+;    (movq (★ env) result)  
 (define (variable n)
-  (let ([t (variable1 n)])
-        (movq t result)))
-
+  (let ([tmp (list (movq (★ env) result))])
+    (for ([i (range 0 n)])
+      (set! tmp (append tmp (list (movq (★ result) result)))))
+    (set! tmp (append tmp (list (movq (★ result 1) result))))
+    tmp))
+  
 ; Sets the variable n levels up from env, to the value of result.
 ;   To “loop” n times: emits n statements.
 (define (set n)
-   (movq result (★ env (⊕ n))))
+  (let ([tmp (list (movq (★ env) temp))])
+    (for ([i (range 0 n)])
+      (set! tmp (append tmp (list (movq (★ temp) temp)))))
+    (set! tmp (append tmp (list (movq result (★ temp 1)))))
+    tmp))
 
 ; Names the current statement address.
 (define (label name)
@@ -286,6 +293,9 @@
 
 ; Put X2 versions of make_add and add in RTL below.
 
+; make_add : (labelled 'make_add (closure add))
+; add: (labelled 'add (variable 1) (movq result temp) (variable 0) (addq temp result))
+  
 
 ; Similarly, find the 64-bit x86 instruction for multiplication, and add multiplication.
 
@@ -309,7 +319,6 @@
                                 (λ_ec (result) (set! stack-pointer saved-stack-pointer)
                                       result))
                      stack-pointer)))
-
 ; The CPU's stack pointer is a register:
 (define stack-pointer (register 'rsp))
 
@@ -321,6 +330,11 @@
 
 ; Put X2 versions of call_ec, make_ec, and ec in RTL below.
 
+;(labelled 'ec (movq result temp) (variable 1) (movq result stack-pointer) (movq temp result))
+;(labelled 'make_ec (closure ec))
+;(labelled 'call_ec (variable 0) (push_result) (closure 'make_ec) (push_result) (movq stack-pointer result) (call) (call)
+
+  
 ; Booleans
 ; --------
 ; As mentioned earlier, we're representing false by the value 0.
@@ -346,10 +360,19 @@
         (setl result-byte)
         (movzbq result-byte result))
 
-(define (setl to) (~a 'setb  " " to))
+(define (setl to) (~a 'setl  " " to))
 (define result-byte (register 'cl))
 (define (movzbq from-1 from-2) (~a 'movzbq " " from-1 ", " from-2))
 
 ; Put X2 versions of make_less_than and less_than in RTL below.
+  
+;(labelled 'less_than (variable 1) (movq result temp) (variable 0) (cmpr result temp) (setl result-byte) (movzbq result-byte result)
+;(labelled 'make_less_than (closure less_than))
 
-(define RTL (list))
+(define RTL (list (labelled 'make_add (closure 'add))
+                  (labelled 'add (variable 1) (movq result temp) (variable 0) (addq temp result))
+                  (labelled 'ec (movq result temp) (variable 1) (movq result stack-pointer) (movq temp result))
+                  (labelled 'make_ec (closure 'ec))
+                  (labelled 'call_ec (variable 0) (push_result) (closure 'make_ec) (push_result) (movq stack-pointer result) (call) (call))
+                  (labelled 'less_than (variable 1) (movq result temp) (variable 0) (cmpq result temp) (setl result-byte) (movzbq result-byte result))
+                  (labelled 'make_less_than (closure 'less_than))))

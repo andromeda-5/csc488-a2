@@ -90,12 +90,13 @@
 ; Transform those directly to their L0 form.
 
 (module+ test
-  (check-equal? (transformer-name T:*id*) *id*)
+  (check-equal? (transformer-name T:*id*) '*id*)
   (check-equal? ((transformer-function T:*id*) '(*id* false)) 0)
   (check-equal? ((transformer-function T:*id*) '(*id* true)) 1)
   (check-equal? ((transformer-function T:*id*) '(*id* x)) '(L0: var x)))
 
 (define-transformer T:*id* *id*
+
   [`(*id* false) 0]
   [`(*id* true) 1]
   [`(*id* ,*<id>*) `(L0: var ,*<id>*)])
@@ -110,10 +111,10 @@
 ; CHECK SET! FUNCTION SHOULDN'T INCLUDE 'set!'?
 (module+ test
   (check-equal? (transformer-name T:set!) 'set!)
-  (check-equal? ((transformer-function T:set!) '(a 2)) '(L0: set! a 2)))
+  (check-equal? ((transformer-function T:set!) '(set! a 2)) '(L0: set! a 2)))
 
 (define-transformer T:set! set!
-  [`(,*<id>* ,*<e>*) `(L0: set! ,*<id>* ,*<e>*)])
+  [`(set! ,*<id>* ,*<e>*) `(L0: set! ,*<id>* ,*<e>*)])
 
 (module+ test
   (check-equal? (transformer-name T:if) 'if)
@@ -133,11 +134,20 @@
 ;  and currying if there are two or more parameters.
 ; Transform the unary single-body-expression form to the L0 form.
 
+(module+ test
+  (check-equal? (transformer-name T:λ) 'λ)
+  (check-equal? ((transformer-function T:λ) '(λ () (x) (y) (z))) '(λ (_) (block (x) (y) (z))))
+  (check-equal? ((transformer-function T:λ) '(λ () (x))) '(λ (_) (block (x))))
+  (check-equal? ((transformer-function T:λ) '(λ (x y z) 2)) '(λ (x) (λ (y) (λ (z) 2)))))
+
 (define-transformer T:λ λ
-  
-  )
-
-
+  [`(λ (,*<id>*) ,*<clause>*) `(L0: λ (,*<id>*) *<clause>*)]
+  [(list 'λ '() <clause> ..1) `(λ (_) ,(append (list 'block) <clause>))]
+  [(list 'λ (list x ..1) <clause> ..1) (let ([tmp (append (list 'λ (list (last x))) <clause>)])
+                                         (for ([i (rest (reverse x))])
+                                           (set! tmp (list 'λ (list i) tmp)))
+                                         tmp)])
+               
 ; *app*
 ; -----
 ; Extends L0's app by allowing zero arguments, or more than one argument.
@@ -145,8 +155,20 @@
 ; Transform the no-argument form into a one-argument form with a dummy argument [see ‘block’].
 ; Transform the unary form to the L0 form.
 
+;(#%app (lambda (x y) (list x y)) 3 4)
+(module+ test
+  (check-equal? (transformer-name T:*app*) '*app*)
+  (check-equal? ((transformer-function T:*app*) '(*app* (λ (x) (λ (y) 2)) 2 3)) '(((λ (x) (λ (y) 2)) 2) 3))
+  (check-equal? ((transformer-function T:*app*) '(*app* (λ (x) (λ (y) (λ (z) 2))) 2 3 4))
+                '((((λ (x) (λ (y) (λ (z) 2))) 2) 3) 4)))
+
 (define-transformer T:*app* *app*
-  [e e])
+  [(list '*app* x y ..1) (let ([tmp x])
+                          (for ([i y])
+                            (set! tmp (append (list tmp) (list i))))
+                          tmp)]
+  [(list '*app* x) (list '*app* x `(block))]
+  [`(*app* ,<e1> ,<e2>) `(L0: app ,<e1> ,<e2>)])
 
 
 ; block
@@ -165,8 +187,16 @@
 ; For other M0 forms that need dummy values [e.g. as mentioned for *app*], use (block) for
 ;  the dummy value.
 
+(module+ test
+  (check-equal? (transformer-name T:block) 'block)
+  (check-equal? ((transformer-function T:block) '(block)) 0)
+  (check-equal? ((transformer-function T:block) '(block true)) 'true)
+  (check-equal? ((transformer-function T:block) '(block (*id* 5) (*datum* 3))) '(let ([<dummy> (*id* 5)]) (*datum* 3)))) 
+
 (define-transformer T:block block
-  [e e])
+  [`(block) 0]
+  [`(block ,<e>) <e>]
+  [(list 'block <e> ...) (append (list 'let `([<dummy> ,(first <e>)])) (rest <e>))])
 
 
 ; let
@@ -181,8 +211,20 @@
 ; Transform using the standard LC transformation: to an expression that makes and immediately calls
 ;  a function.
 
+(module+ test
+  (check-equal? (transformer-name T:let) 'let)
+  (check-equal? ((transformer-function T:let) '(let ([<dummy> (*datum* 5)] [<dummy2> (*datum* 7)]) (*datum* 6)))
+                '(((λ (<dummy>) (λ (<dummy2>) (block (*datum* 6)))) (*datum* 7)) (*datum* 5))))
+
 (define-transformer T:let let
-  [e e])
+  [(list 'let (list (list <id> <init>) ..1) <body> ..1)
+   (let ([tmp (append (list 'λ (list (last <id>))) (list (append (list 'block) <body>)))])
+     (for ([i (rest (reverse <id>))])
+       (set! tmp (append (list 'λ (list i)) (list tmp))))
+     (for ([j (reverse <init>)])
+       (set! tmp (list tmp j)))
+     tmp)])
+               
 
 
 ; local
@@ -199,9 +241,21 @@
 ; Transform using the standard LC+set! transformation: to an expression that initializes
 ;  all the <f-id>s to dummy values, sets them to their functions, then evaluates the body.
 
-(define-transformer T:local local
-  [e e])
+(module+ test
+  (check-equal? (transformer-name T:local) 'local)
+  (check-equal? ((transformer-function T:local) '(local [(define (x (a1 a2)) true) (define (y (a1)) false)] (and (x (1 2)))))
+                '(let ((x _) (y _)) (set! x (λ (a1 a2) (true))) (set! y (λ (a1) (false))) (block (and (x (1 2)))))))
 
+(define-transformer T:local local
+  [(list 'local (list (list 'define (list <f-id> <args>) <f-body> ..1) ..1) <body> ..1)
+   (let ([tmp (list)])
+     (for ([i <f-id>])
+       (set! tmp (append tmp (list (list i '_)))))
+   (set! tmp (append (list 'let) (list tmp)))
+     (for ([j <f-id>][k <args>][l <f-body>])
+       (set! tmp (append tmp (list `(set! ,j (λ ,k ,l))))))
+     (set! tmp (append tmp (list (append (list 'block) <body>))))
+     tmp)])
 
 ; and or
 ; ------
@@ -210,10 +264,20 @@
 ; Standard short-circuiting operators for two or more boolean expressions.
 ; Transform to ‘if’s or ‘cond’s.
 
+(module+ test
+  (check-equal? (transformer-name T:and) 'and)
+  (check-equal? ((transformer-function T:and) '(and true false)) '(if true (and false) true)))
+
 (define-transformer T:and and
-  [e e])
+  [(list 'and <e0> <e> ..1) `(if ,<e0> ,(append (list 'and) <e>) ,<e0>)])
+
+(module+ test
+  (check-equal? (transformer-name T:or) 'or)
+  (check-equal? ((transformer-function T:or) '(or true false)) '(if true true (or false)))
+  (check-equal? ((transformer-function T:or) '(or false false false true)) '(if false false (or false false true))))
+
 (define-transformer T:or or
-  [e e])
+  [(list 'or <e0> <e> ..1) (list 'if <e0> <e0> (append (list 'or) <e>))])
 
 
 ; cond
@@ -230,9 +294,36 @@
 ;  then evaluates the corresponding <result>s as a block.
 ;
 ; Transform using ‘if’s, ‘when’s, and/or ‘block’s.
+(module+ test
+  (check-equal? (transformer-name T:cond) 'cond)
+  (check-equal? ((transformer-function T:cond) '(cond (true evaluate nevaluate)))
+                '(when (true evaluate nevaluate)))
+  (check-equal? ((transformer-function T:cond) '(cond (true evaluate nevaluate) (true2 evalute2)))
+                '(if true (block evaluate nevaluate) (cond (true2 evalute2))))
+  (check-equal? ((transformer-function T:cond) '(cond (true evaluate nevaluate) (true2 evalute2) (true3 evaluate3)))
+                '(if true (block evaluate nevaluate) (cond (true2 evalute2) (true3 evaluate3))))
+  (check-equal? ((transformer-function T:cond) '(cond (else 5))) '(block 5))
+  (check-equal? ((transformer-function T:cond) '(cond (true e1 e2) (else 5)))
+                `(if true (block e1 e2) (block 5))))
 
 (define-transformer T:cond cond
-  [e e])
+  [(list 'cond (list 'else <else-result> ..1)) (append (list 'block) <else-result>)]
+  [(list 'cond (list <condition> <result> ..1) ... (list 'else <else-result> ..1))
+   (if (= (length <condition>) 1)
+       `(if ,(first <condition>) ,(append (list 'block) (first <result>)) ,(append (list 'block) <else-result>))
+       `(if ,(first <condition>) ,(append (list 'block) (first <result>)) ,(let ([tmp (list)])
+                                                                               (for ([i (<condition>)][j (rest <result>)])
+                                                                                 (set! tmp (append tmp (list (append (list i) j)))))
+                                                                               (set! tmp (append (list 'cond) (list tmp)))
+                                                                               tmp)))]
+  [(list 'cond (list <condition> <result> ..1) ..1)
+   (if (= (length <condition>) 1)
+         `(when ,(append <condition> (first <result>)))
+         `(if ,(first <condition>) ,(append (list 'block) (first <result>)) ,(let ([tmp (list)])
+                                                                               (for ([i (rest <condition>)][j (rest <result>)])
+                                                                                 (set! tmp (append tmp (list (append (list i) j)))))
+                                                                               (set! tmp (append (list 'cond) tmp))
+                                                                               tmp)))]) 
 
 
 ; when
@@ -242,8 +333,12 @@
     ...+)
 ; If boolean <condition> is true evaluates the <body>s as a block, otherwise produces a dummy value.
 
+(module+ test
+  (check-equal? (transformer-name T:when) 'when)
+  (check-equal? ((transformer-function T:when) '(when true 2)) (list 'if 'true '(block 2) (list 'block))))
+
 (define-transformer T:when when
-  [e e])
+  [(list 'when <condition> <body> ..1) (list 'if <condition> (append (list 'block) <body>) (list 'block))])
 
 
 ; while
@@ -253,9 +348,14 @@
          ...+)
 ; A standard while loop.
 ; Transform to a recursive no-argument function that is immediately called.
+(module+ test
+  (check-equal? (transformer-name T:while) 'while)
+  (check-equal? ((transformer-function T:while) '(while true 5)) '((λ () (block 5) (while true 5)) (block)))
+  (check-equal? ((transformer-function T:while) '(while (< 5 4) (+ 2 3) (+ 4 5)))
+                '((λ () (block (+ 2 3) (+ 4 5)) (while (< 5 4) (+ 2 3) (+ 4 5)))(block))))
 
 (define-transformer T:while while
-  [e e])
+  [(list 'while <condition> <body> ..1) `((λ () ,(append (list 'block) <body>) ,(append (list 'while <condition>) <body>)) (block))])
 
 
 ; returnable breakable continuable
@@ -272,11 +372,11 @@
 ;  to return early, break, or continue.
 
 (define-transformer T:returnable returnable
-  [e e])
+  [(list 'returnable <e> ..1) (list 'call/ec (list 'λ (list 'return) (append (list 'block) <e>)))])
 (define-transformer T:breakable breakable
-  [e e])
+  [(list 'breakable <e> ..1) (list 'call/ec (list 'λ (list 'break) (append (list 'block) <e>)))])
 (define-transformer T:continuable continuable
-  [e e])
+  [(list 'continuable <e> ..1) (list 'call/ec (list 'λ (list 'continue) (append (list 'block) <e>)))])
 
 
 ; List of all the transformations.
@@ -297,14 +397,22 @@
            ; Boolean logic
            ; -------------
            ; (not b) : the negation of b, implemented with ‘if’
-           
+           (define (not b)
+             (if b false true))
            ; Arithmetic
            ; ----------
            ; (- a b) : the difference between a and b
            (define (- a b) (+ a (⊖ b)))
            ; (⊖ a) : the negative of a
+           (define (⊖ a) (- a))
            ; (> a b) : whether a is greater than b
+           (define (> a b)
+             (if (> a b) 'true 'false))
            ; (>= a b) : whether a is greater than or equal to b
+           (define (>= a b)
+             (if (>= a b) 'true 'false))
            ; (= a b) : whether a is equal to b
+           (define (= a b)
+             (if (= a b) 'true 'false))
            ]
      ,e))
