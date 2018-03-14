@@ -141,7 +141,7 @@
   (check-equal? ((transformer-function T:λ) '(λ (x y z) 2)) '(λ (x) (λ (y) (λ (z) 2)))))
 
 (define-transformer T:λ λ
-  [`(λ (,*<id>*) ,*<clause>*) `(L0: λ (,*<id>*) *<clause>*)]
+  [`(λ (,*<id>*) ,*<clause>*) `(L0: λ (,*<id>*) ,*<clause>*)]
   [(list 'λ '() <clause> ..1) `(λ (_) ,(append (list 'block) <clause>))]
   [(list 'λ (list x ..1) <clause> ..1) (let ([tmp (append (list 'λ (list (last x))) <clause>)])
                                          (for ([i (rest (reverse x))])
@@ -163,12 +163,14 @@
                 '((((λ (x) (λ (y) (λ (z) 2))) 2) 3) 4)))
 
 (define-transformer T:*app* *app*
+  [(list '*app* x) (list '*app* x `(block))]
+  [`(*app* ,<e1> ,<e2>) `(L0: app ,<e1> ,<e2>)]
   [(list '*app* x y ..1) (let ([tmp x])
                           (for ([i y])
                             (set! tmp (append (list tmp) (list i))))
-                          tmp)]
-  [(list '*app* x) (list '*app* x `(block))]
-  [`(*app* ,<e1> ,<e2>) `(L0: app ,<e1> ,<e2>)])
+                          tmp)])
+  
+  
 
 
 ; block
@@ -191,12 +193,12 @@
   (check-equal? (transformer-name T:block) 'block)
   (check-equal? ((transformer-function T:block) '(block)) 0)
   (check-equal? ((transformer-function T:block) '(block true)) 'true)
-  (check-equal? ((transformer-function T:block) '(block (*id* 5) (*datum* 3))) '(let ([<dummy> (*id* 5)]) (*datum* 3)))) 
+  (check-equal? ((transformer-function T:block) '(block (*id* 5) (*datum* 3))) '(let ([_ (*id* 5)]) (*datum* 3)))) 
 
 (define-transformer T:block block
   [`(block) 0]
   [`(block ,<e>) <e>]
-  [(list 'block <e> ...) (append (list 'let `([<dummy> ,(first <e>)])) (rest <e>))])
+  [(list 'block <e> ...) (append (list 'let `([_ ,(first <e>)])) (rest <e>))])
 
 
 ; let
@@ -213,19 +215,18 @@
 
 (module+ test
   (check-equal? (transformer-name T:let) 'let)
-  (check-equal? ((transformer-function T:let) '(let ([<dummy> (*datum* 5)] [<dummy2> (*datum* 7)]) (*datum* 6)))
-                '(((λ (<dummy>) (λ (<dummy2>) (block (*datum* 6)))) (*datum* 7)) (*datum* 5))))
+  (check-equal? ((transformer-function T:let) '(let ([_(*datum* 5)] [<dummy2> (*datum* 7)]) (*datum* 6)))
+                '(((λ (_) (λ (_) (block (*datum* 6)))) (*datum* 7)) (*datum* 5))))
 
 (define-transformer T:let let
   [(list 'let (list (list <id> <init>) ..1) <body> ..1)
    (let ([tmp (append (list 'λ (list (last <id>))) (list (append (list 'block) <body>)))])
      (for ([i (rest (reverse <id>))])
        (set! tmp (append (list 'λ (list i)) (list tmp))))
-     (for ([j (reverse <init>)])
+     (for ([j <init>])
        (set! tmp (list tmp j)))
      tmp)])
                
-
 
 ; local
 ; -----
@@ -243,19 +244,24 @@
 
 (module+ test
   (check-equal? (transformer-name T:local) 'local)
-  (check-equal? ((transformer-function T:local) '(local [(define (x (a1 a2)) true) (define (y (a1)) false)] (and (x (1 2)))))
-                '(let ((x _) (y _)) (set! x (λ (a1 a2) (true))) (set! y (λ (a1) (false))) (block (and (x (1 2)))))))
+  (check-equal? ((transformer-function T:local) '(local [(define (x (a1 a2)) true) (define (y (a1)) false)] (and x y)))
+                '(λ () (let ((x _) (y _))(set! x (λ (a1 a2) true)) (set! y (λ (a1) false)) (block (and x y)))))
+  ;(check-equal? ((transformer-function T:local) '(local [(define (- (a b)) (+ a (⊖ b)))] 2)) 'nothing)
+  )
 
 (define-transformer T:local local
-  [(list 'local (list (list 'define (list <f-id> <args>) <f-body> ..1) ..1) <body> ..1)
+  [;(list 'local (list (list 'define (list <f-id> (list <args> ...)) <f-body> ..1) ..1) <body> ..1)
+   (list 'local (list (list 'define (list <f-id>  <args> ...) <f-body> ..1) ..1) <body> ..1)
    (let ([tmp (list)])
      (for ([i <f-id>])
-       (set! tmp (append tmp (list (list i '_)))))
-   (set! tmp (append (list 'let) (list tmp)))
-     (for ([j <f-id>][k <args>][l <f-body>])
-       (set! tmp (append tmp (list `(set! ,j (λ ,k ,l))))))
+       (set! tmp (append tmp (list (list i `(block))))))
+     (set! tmp (list 'let tmp))
+     (for ([i <f-id>][k <args>][l <f-body>])
+       (set! tmp (append tmp (list (list 'set! i (append (list 'λ k) l))))))
      (set! tmp (append tmp (list (append (list 'block) <body>))))
-     tmp)])
+     (set! tmp (list (list 'λ '() tmp) '(block)))
+     tmp)
+   ])
 
 ; and or
 ; ------
@@ -269,6 +275,7 @@
   (check-equal? ((transformer-function T:and) '(and true false)) '(if true (and false) true)))
 
 (define-transformer T:and and
+  [(list 'and <e0> <e>) `(if ,<e0> ,<e> ,<e0>)]
   [(list 'and <e0> <e> ..1) `(if ,<e0> ,(append (list 'and) <e>) ,<e0>)])
 
 (module+ test
@@ -277,6 +284,7 @@
   (check-equal? ((transformer-function T:or) '(or false false false true)) '(if false false (or false false true))))
 
 (define-transformer T:or or
+  [(list 'or <e0> <e>) `(if ,<e0> ,<e0> ,<e>)]
   [(list 'or <e0> <e> ..1) (list 'if <e0> <e0> (append (list 'or) <e>))])
 
 
@@ -312,13 +320,14 @@
    (if (= (length <condition>) 1)
        `(if ,(first <condition>) ,(append (list 'block) (first <result>)) ,(append (list 'block) <else-result>))
        `(if ,(first <condition>) ,(append (list 'block) (first <result>)) ,(let ([tmp (list)])
-                                                                               (for ([i (<condition>)][j (rest <result>)])
+                                                                               (for ([i (rest <condition>)][j (rest <result>)])
                                                                                  (set! tmp (append tmp (list (append (list i) j)))))
-                                                                               (set! tmp (append (list 'cond) (list tmp)))
+                                                                               (set! tmp (append tmp (list (append (list 'else) <else-result>))))
+                                                                               (set! tmp (append (list 'cond) tmp))
                                                                                tmp)))]
   [(list 'cond (list <condition> <result> ..1) ..1)
    (if (= (length <condition>) 1)
-         `(when ,(append <condition> (first <result>)))
+         (append (list 'when) (append <condition> (first <result>)));`(when ,<condition> ,(first <result>))
          `(if ,(first <condition>) ,(append (list 'block) (first <result>)) ,(let ([tmp (list)])
                                                                                (for ([i (rest <condition>)][j (rest <result>)])
                                                                                  (set! tmp (append tmp (list (append (list i) j)))))
@@ -355,9 +364,15 @@
                 '((λ () (block (+ 2 3) (+ 4 5)) (while (< 5 4) (+ 2 3) (+ 4 5)))(block))))
 
 (define-transformer T:while while
-  [(list 'while <condition> <body> ..1) `((λ () ,(append (list 'block) <body>) ,(append (list 'while <condition>) <body>)) (block))])
+  [(list 'while <condition> <body> ..1)
+   (list 'local (list (list 'define (list 'while_loop)
+                            (list 'when <condition> (append (append (list 'block) <body>) (list (list 'while_loop))))))
+         (list 'while_loop))])
+
+   ;`((λ () ,(append (list 'block) <body>) ,(append (list 'while <condition>) <body>)) (block))])
 
 
+   
 ; returnable breakable continuable
 ; --------------------------------
 #;(returnable <e>
@@ -397,8 +412,7 @@
            ; Boolean logic
            ; -------------
            ; (not b) : the negation of b, implemented with ‘if’
-           (define (not b)
-             (if b false true))
+           (define (not b) (if b false true))
            ; Arithmetic
            ; ----------
            ; (- a b) : the difference between a and b
@@ -406,13 +420,11 @@
            ; (⊖ a) : the negative of a
            (define (⊖ a) (* -1 a))
            ; (> a b) : whether a is greater than b
-           (define (> a b)
-             (and (>= a b) (not (= a b))))
+           (define (> a b) (and (>= a b) (not (= a b))))
            ; (>= a b) : whether a is greater than or equal to b
-           (define (>= a b)
-             (not (< a b))
+           (define (>= a b) (not (< a b)))
            ; (= a b) : whether a is equal to b
-           (define (= a b)
-             (and (not (< 0 (- a b))) (not (< 0 (- b a)))))
+           ;(define (= (a b)) (and (not (< 0 (- a b))) (not (< 0 (- b a)))))
+           (define (= a b) (not (or (< 0 (- a b)) (< 0 (- b a)))))
            ]
      ,e))

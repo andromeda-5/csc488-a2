@@ -72,6 +72,7 @@
 (define (movq from to) (~a 'movq " " from   ", " to))
 (define (addq from to) (~a 'addq " " from   ", " to))
 
+
 #| Integer Constants
    =================
  Integer constants are prefixed with "$".
@@ -109,9 +110,7 @@
 ; main()
 ;   temp = make_add
 ;   goto main
-(labelled 'main
-            (movq (label-reference 'make_add) temp)
-            (jmp-label 'main))
+;#(labelled 'main (movq (label-reference 'make_add) temp)(jmp-label 'main))
 
 #| The Stack
    =========
@@ -193,7 +192,10 @@
 ;   The closure is put at the address referred to by next, and then next is adjusted
 ;    to point to the next place to put a pair.
 (define (closure name)
-  (list (movq (label-reference name) (★ next))
+  (list ;(movq next temp)
+        ;(movq (label-reference name) temp)
+        (movq (label-reference name) temp)
+        (movq temp (★ next))
         (movq env (★ next 1))
         (movq next result)
         (addq (constant (⊕ 2)) next)))
@@ -203,17 +205,18 @@
 ;   Sets env to a new environment containing the closure's environment and the argument.
 ;   Calls the closure.
 (define (call)
-  (list (popq temp)
-        (pushq env)
+  (list (popq temp) ; store the address to the body of the closure in temp
+        (pushq env) ; push the environment
         
-        (movq (★ temp 1) env)
-        (movq env (★ next))
-        
+        (movq (★ temp 1) env) ; move f[1] to the environment
+        (movq env (★ next)) ; move the environment address onto the heap? 
         (movq result (★ next 1))
+
         (movq next env)
+        
         (addq (constant (⊕ 2)) next)
         
-        (callq temp)
+        (callq temp) 
         (popq env)))
 
 ; Puts the value of the variable n levels up from env, into result.
@@ -221,19 +224,19 @@
 ; env is an address: parent environment (the address of the parent environment), variable at this environment
 ; until we reach nth variable... move the parent environment (the address to the parent environment) to result
 ; once we found the right environment move variable at that environment to result and we are done
-; for (i in range 0 --- n):
-;    (movq (★ env) result)  
+
 (define (variable n)
-  (let ([tmp (list (movq (★ env) result))])
+  (let ([tmp (list (movq env result))])
     (for ([i (range 0 n)])
-      (set! tmp (append tmp (list (movq (★ result) result)))))
+      (set! tmp (append tmp
+                        (list (movq (★ result) result)))))
     (set! tmp (append tmp (list (movq (★ result 1) result))))
     tmp))
   
 ; Sets the variable n levels up from env, to the value of result.
 ;   To “loop” n times: emits n statements.
 (define (set n)
-  (let ([tmp (list (movq (★ env) temp))])
+  (let ([tmp (list (movq env temp))])
     (for ([i (range 0 n)])
       (set! tmp (append tmp (list (movq (★ temp) temp)))))
     (set! tmp (append tmp (list (movq result (★ temp 1)))))
@@ -295,9 +298,10 @@
 
 ; make_add : (labelled 'make_add (closure add))
 ; add: (labelled 'add (variable 1) (movq result temp) (variable 0) (addq temp result))
-  
+
 
 ; Similarly, find the 64-bit x86 instruction for multiplication, and add multiplication.
+(define (imulq from to) (~a 'imulq " " from   ", " to))
 
 ; Escape Continuations
 ; --------------------
@@ -369,10 +373,13 @@
 ;(labelled 'less_than (variable 1) (movq result temp) (variable 0) (cmpr result temp) (setl result-byte) (movzbq result-byte result)
 ;(labelled 'make_less_than (closure less_than))
 
-(define RTL (list (labelled 'make_add (closure 'add))
-                  (labelled 'add (variable 1) (movq result temp) (variable 0) (addq temp result))
-                  (labelled 'ec (movq result temp) (variable 1) (movq result stack-pointer) (movq temp result))
-                  (labelled 'make_ec (closure 'ec))
-                  (labelled 'call_ec (variable 0) (push_result) (closure 'make_ec) (push_result) (movq stack-pointer result) (call) (call))
-                  (labelled 'less_than (variable 1) (movq result temp) (variable 0) (cmpq result temp) (setl result-byte) (movzbq result-byte result))
-                  (labelled 'make_less_than (closure 'less_than))))
+(define RTL (list (labelled 'make_multiply (closure 'multiply) (retq))
+                  (labelled 'multiply (variable 0) (movq result temp) (variable 1) (imulq temp result) (retq))
+                  (labelled 'make_add (closure 'add) (retq))
+                  (labelled 'add (variable 0) (movq result temp) (variable 1) (addq temp result) (retq))
+                  (labelled 'ec (movq result temp) (variable 1) (movq result stack-pointer) (movq temp result) (retq))
+                  (labelled 'make_ec (closure 'ec) (retq))
+                  (labelled 'call_ec (variable 0) (push_result) (closure 'make_ec) (push_result) (movq stack-pointer result) (call) (call) (retq))
+                  (labelled 'less_than (variable 1) (movq result temp) (variable 0) (cmpq result temp) (setl result-byte) (movzbq result-byte result) (retq))
+                  (labelled 'make_less_than (closure 'less_than) (retq))
+                  ))

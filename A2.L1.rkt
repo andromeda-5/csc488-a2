@@ -101,9 +101,9 @@
     [`(L0: λ (,<id>) ,<e>)
      `(L0: λ (,<id>) ,(debruijn <e> (append (list <id>) env)))]
     [`(L0: if ,<e1> , <e2> ,<e3>)
-     `(L0: if ,(debruijn <e1>)
-                                       ,(debruijn <e2>)
-                                       ,(debruijn <e3>))]
+     `(L0: if ,(debruijn <e1> env)
+                                       ,(debruijn <e2> env)
+                                       ,(debruijn <e3> env))]
     [`(L0: var ,<id>)
      (cond [(index-of env <id>) `(L0: var, (index-of env <id>))]
                             [else `(L0: var ,<id>)])]

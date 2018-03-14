@@ -65,27 +65,36 @@
             (match e
               
               ; Head identifier determines meaning: pre-order traversal.
-
+              
               ; New forms.
               [`(,head . ,_) #:when (dict-has-key? env′ head)
                              ; Internal node can re-arrange subtree, in particular its subtrees.
                              (expand ; Expansion continues after rewrite.
                               ; Rewrite:
-                              ((dict-ref env′ head) e))]
+                              ((dict-ref env′ head) e))
+                             ]
               
               ; Core forms: they determine which sub-forms are expressions to continue expanding.
+
               [`(L0: datum ,_) e]
+
               [`(L0: var ,_) e]
               [`(L0: λ (,id) ,e) `(L0: λ (,id) ,(expand e))]
+
               [`(L0: app ,e0 ,e1) `(L0: app ,(expand e0) ,(expand e1))]
+
               [`(L0: set! ,id ,e) `(L0: set! ,id ,(expand e))]
+
               [`(L0: if ,e0 ,e1 ,e2) `(L0: if ,(expand e0) ,(expand e1) ,(expand e2))]
+
 
               ; Name default function application explicitly.
               [`(,head . ,_) (expand `(*app* . ,e))]
 
+
               ; Wrap identifier access and integer literals.
               [id #:when (symbol? id) (expand `(*id* ,id))]
+
               [integer (expand `(*datum* ,integer))]))]
     
     (expand e)))
