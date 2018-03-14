@@ -215,8 +215,8 @@
 
 (module+ test
   (check-equal? (transformer-name T:let) 'let)
-  (check-equal? ((transformer-function T:let) '(let ([_(*datum* 5)] [<dummy2> (*datum* 7)]) (*datum* 6)))
-                '(((λ (_) (λ (_) (block (*datum* 6)))) (*datum* 7)) (*datum* 5))))
+  (check-equal? ((transformer-function T:let) '(let ([_(*datum* 5)] [_(*datum* 7)]) (*datum* 6)))
+                '(((λ (_) (λ (_) (block (*datum* 6)))) (*datum* 5)) (*datum* 7))))
 
 (define-transformer T:let let
   [(list 'let (list (list <id> <init>) ..1) <body> ..1)
@@ -245,13 +245,13 @@
 (module+ test
   (check-equal? (transformer-name T:local) 'local)
   (check-equal? ((transformer-function T:local) '(local [(define (x (a1 a2)) true) (define (y (a1)) false)] (and x y)))
-                '(λ () (let ((x _) (y _))(set! x (λ (a1 a2) true)) (set! y (λ (a1) false)) (block (and x y)))))
-  ;(check-equal? ((transformer-function T:local) '(local [(define (- (a b)) (+ a (⊖ b)))] 2)) 'nothing)
-  )
+                '((λ () (let ((x (block)) (y (block)))
+                          (set! x (λ ((a1 a2)) true))
+                          (set! y (λ ((a1)) false))
+                          (block (and x y))))(block))))
 
 (define-transformer T:local local
-  [;(list 'local (list (list 'define (list <f-id> (list <args> ...)) <f-body> ..1) ..1) <body> ..1)
-   (list 'local (list (list 'define (list <f-id>  <args> ...) <f-body> ..1) ..1) <body> ..1)
+   [(list 'local (list (list 'define (list <f-id>  <args> ...) <f-body> ..1) ..1) <body> ..1)
    (let ([tmp (list)])
      (for ([i <f-id>])
        (set! tmp (append tmp (list (list i `(block))))))
@@ -272,7 +272,7 @@
 
 (module+ test
   (check-equal? (transformer-name T:and) 'and)
-  (check-equal? ((transformer-function T:and) '(and true false)) '(if true (and false) true)))
+  (check-equal? ((transformer-function T:and) '(and true false)) '(if true false true)))
 
 (define-transformer T:and and
   [(list 'and <e0> <e>) `(if ,<e0> ,<e> ,<e0>)]
@@ -280,7 +280,7 @@
 
 (module+ test
   (check-equal? (transformer-name T:or) 'or)
-  (check-equal? ((transformer-function T:or) '(or true false)) '(if true true (or false)))
+  (check-equal? ((transformer-function T:or) '(or true false)) '(if true true false))
   (check-equal? ((transformer-function T:or) '(or false false false true)) '(if false false (or false false true))))
 
 (define-transformer T:or or
@@ -304,12 +304,12 @@
 ; Transform using ‘if’s, ‘when’s, and/or ‘block’s.
 (module+ test
   (check-equal? (transformer-name T:cond) 'cond)
-  (check-equal? ((transformer-function T:cond) '(cond (true evaluate nevaluate)))
-                '(when (true evaluate nevaluate)))
-  (check-equal? ((transformer-function T:cond) '(cond (true evaluate nevaluate) (true2 evalute2)))
-                '(if true (block evaluate nevaluate) (cond (true2 evalute2))))
-  (check-equal? ((transformer-function T:cond) '(cond (true evaluate nevaluate) (true2 evalute2) (true3 evaluate3)))
-                '(if true (block evaluate nevaluate) (cond (true2 evalute2) (true3 evaluate3))))
+  (check-equal? ((transformer-function T:cond) '(cond (true e1 e2)))
+                '(when true e1 e2))
+  (check-equal? ((transformer-function T:cond) '(cond (true e1 e2) (true2 e3)))
+                '(if true (block e1 e2) (cond (true2 e3))))
+  (check-equal? ((transformer-function T:cond) '(cond (true e1 e2) (true2 e2) (true3 e3)))
+                '(if true (block e1 e2) (cond (true2 e2) (true3 e3))))
   (check-equal? ((transformer-function T:cond) '(cond (else 5))) '(block 5))
   (check-equal? ((transformer-function T:cond) '(cond (true e1 e2) (else 5)))
                 `(if true (block e1 e2) (block 5))))
@@ -359,17 +359,15 @@
 ; Transform to a recursive no-argument function that is immediately called.
 (module+ test
   (check-equal? (transformer-name T:while) 'while)
-  (check-equal? ((transformer-function T:while) '(while true 5)) '((λ () (block 5) (while true 5)) (block)))
+  (check-equal? ((transformer-function T:while) '(while true 5)) '(local ((define (while_loop) (when true (block 5 (while_loop))))) (while_loop)))
   (check-equal? ((transformer-function T:while) '(while (< 5 4) (+ 2 3) (+ 4 5)))
-                '((λ () (block (+ 2 3) (+ 4 5)) (while (< 5 4) (+ 2 3) (+ 4 5)))(block))))
+                '(local ((define (while_loop) (when (< 5 4) (block (+ 2 3) (+ 4 5) (while_loop))))) (while_loop))))
 
 (define-transformer T:while while
   [(list 'while <condition> <body> ..1)
    (list 'local (list (list 'define (list 'while_loop)
                             (list 'when <condition> (append (append (list 'block) <body>) (list (list 'while_loop))))))
          (list 'while_loop))])
-
-   ;`((λ () ,(append (list 'block) <body>) ,(append (list 'while <condition>) <body>)) (block))])
 
 
    

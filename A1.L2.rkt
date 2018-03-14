@@ -133,9 +133,7 @@
                              '()))
   (check-equal? (L1→L2 '(L1: app (L1: λ 0 (L1: app (L1: app (L1: var +) (L1: datum 3)) (L1: var 0))) (L1: datum 5)))
                 (compiled:L2 '((L2: closure lambda_0) (L2: push_result) (L2: set_result 5) (L2: call))
-                             '((lambda_0 ((L2: closure make_add) (L2: push_result) (L2: set_result 3) (L2: call) (L2: push_result) (L2: variable 0) (L2: call))))))
-  
-  )
+                             '((lambda_0 ((L2: closure make_add) (L2: push_result) (L2: set_result 3) (L2: call) (L2: push_result) (L2: variable 0) (L2: call)))))))
 
 (define (L1→L2 e)
   (match e
